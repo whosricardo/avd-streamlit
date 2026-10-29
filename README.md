@@ -2,10 +2,12 @@
 
 Repositório utilizado para aula prática relacionada a Streamlit na disciplina Análise e Visualização de Dados da Cesar School no período de 2026.2.
 
-Repositório-modelo das Aulas 21, 22 e 23: construção de dois dashboards em Streamlit a partir da EDA desenvolvida em sala. O deploy dos dashboards ocorrerá via Streamlit Community Cloud e serão os seguintes:
+Projeto das Aulas 21, 22 e 23: construção de dois dashboards em Streamlit a partir da EDA do dataset **League of Legends Diamond Ranked Games (10 min)**. A base reúne o estado de partidas Diamond/Master aos dez minutos e o resultado final.
 
-- Dashboard 1 = correlação + distribuição das variáveis quantitativas
-- Dashboard 2 = KPIs
+- **Dashboard 1:** correlação de Spearman e distribuição das variáveis quantitativas, com comparação por vencedor.
+- **Dashboard 2:** KPIs de vitória, ouro, abates e objetivos, com filtros e seleção vinculada por faixa de nível.
+
+Fonte dos dados: [Kaggle — League of Legends Diamond Ranked Games (10 min)](https://www.kaggle.com/datasets/bobbyscience/league-of-legends-diamond-ranked-games-10-min).
 
 ## Setup
 
@@ -38,6 +40,9 @@ python -m pip install -r requirements.txt
 # Skills de IA do Streamlit (ver seção "IA neste projeto")
 streamlit skills --yes
 
+# Abra notebooks/eda-com-downloads.ipynb e execute todas as células
+# para gerar data/clean/dataset.csv antes de iniciar o app.
+
 streamlit run app.py
 ```
 
@@ -48,8 +53,8 @@ streamlit run app.py
 - **Windows: "a execução de scripts foi desabilitada" ao ativar no PowerShell:** rode uma vez `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, ou use o cmd.
 - **Python fora de 3.11–3.15:** instale uma versão compatível em [python.org](https://www.python.org/downloads/) e crie o venv com ela, como no exemplo acima.
 - **Apareceu `ModuleNotFoundError` ou `streamlit: command not found`:** o venv provavelmente não está ativo. Ative de novo e confira o `(.venv)` no prompt.
-- **Erro de certificado no `pip install` (macOS, Python do python.org):** rode `Install Certificates.command`, na pasta Python 3.X em Aplicativos.
-- **`DatasetNotFoundError` ao baixar o dataset no notebook (macOS, Python do python.org):** é o mesmo problema de certificado SSL (o `pandas` não consegue ler o CSV da UCI). Rode `Install Certificates.command` e reinicie o kernel. O notebook `eda-com-downloads.ipynb` já define `SSL_CERT_FILE` com o `certifi` como contorno.
+- **Erro de certificado ao baixar o CSV no notebook (macOS, Python do python.org):** rode `Install Certificates.command`, na pasta Python 3.X em Aplicativos, e reinicie o kernel.
+- **O app informa que faltam colunas de LoL:** execute todas as células de `notebooks/eda-com-downloads.ipynb` para substituir o CSV de exemplo pela exportação correta.
 
 ## Estrutura de dados: `data/raw` vs `data/clean`
 

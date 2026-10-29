@@ -1,20 +1,20 @@
-# Configuração do Streamlit. Descomente e ajuste conforme o projeto avançar.
+# Identidade visual do dashboard: floresta, musgo e âmbar.
 # O tema pode ser trocado pelo menu ⋮ → Settings → Choose app theme.
 
 [theme]
-paddingTop = "0.0rem"     # espaço abaixo da barra do topo (valor entre aspas)
-# font = "sans serif"     # "sans serif", "serif" ou "monospace"
+paddingTop = "0.5rem"
+font = "sans serif"
 
 [theme.light]
-primaryColor = "#c1121f"            # cor de destaque (widgets, links): mesmo vermelho dos histogramas
-backgroundColor = "#ffffff"         # fundo da página
-secondaryBackgroundColor = "#f0f2f6"  # fundo da sidebar e de widgets
-textColor = "#31333f"               # cor do texto
-borderColor = "#d5dae5"
+primaryColor = "#d99a16"
+backgroundColor = "#fbfaf3"
+secondaryBackgroundColor = "#e8f0e9"
+textColor = "#17372a"
+borderColor = "#b8c9bc"
 
 [theme.dark]
-primaryColor = "#c1121f"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#fafafa"
-borderColor = "#41444e"
+primaryColor = "#f0b63a"
+backgroundColor = "#10251c"
+secondaryBackgroundColor = "#19382a"
+textColor = "#f7f3df"
+borderColor = "#436351"
