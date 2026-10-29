@@ -313,4 +313,249 @@ with tab_dashboard_1:
             st.altair_chart(histogram, width="stretch")
 
 with tab_dashboard_2:
-    st.info("O painel de desempenho será implementado no próximo commit.")
+    st.subheader("Vantagem construída aos 10 minutos")
+    st.caption(
+        "Filtre o cenário e clique em uma faixa de nível para recalcular os KPIs "
+        "e o gráfico de objetivos."
+    )
+
+    filter_winner, filter_first_blood, filter_level = st.columns([1.1, 1, 1.4])
+    with filter_winner:
+        selected_winners = st.multiselect(
+            "Vencedor da partida",
+            options=["Time Azul", "Time Vermelho"],
+            default=["Time Azul", "Time Vermelho"],
+            key="performance_winner",
+        )
+    with filter_first_blood:
+        selected_first_blood = st.selectbox(
+            "Primeiro abate",
+            options=["Qualquer time", "Time Azul", "Time Vermelho"],
+            key="performance_first_blood",
+        )
+    with filter_level:
+        level_order = ["Baixo", "Médio-baixo", "Médio-alto", "Alto"]
+        available_levels = [
+            level
+            for level in level_order
+            if level in df_filtered["avg_level_band"].dropna().astype(str).unique()
+        ]
+        selected_levels = st.multiselect(
+            "Nível médio do time azul",
+            options=available_levels,
+            default=available_levels,
+            key="performance_level",
+        )
+
+    performance = df_filtered[
+        df_filtered["team_label"].isin(selected_winners)
+        & df_filtered["avg_level_band"].astype(str).isin(selected_levels)
+    ].copy()
+    if selected_first_blood == "Time Azul":
+        performance = performance[performance["blueFirstBlood"] == 1]
+    elif selected_first_blood == "Time Vermelho":
+        performance = performance[performance["blueFirstBlood"] == 0]
+
+    if performance.empty:
+        st.warning("Nenhuma partida corresponde aos filtros do Dashboard 2.")
+    else:
+        performance["kill_diff"] = performance["blueKills"] - performance["redKills"]
+        performance["objective_diff"] = (
+            performance["blueObjectives"] - performance["redObjectives"]
+        )
+
+        level_summary = (
+            performance.groupby("avg_level_band", observed=True, as_index=False)
+            .agg(
+                matches=("gameId", "count"),
+                blue_win_rate=("blueWins", lambda values: values.mean() * 100),
+                average_gold_diff=("blueGoldDiff", "mean"),
+                average_xp_diff=("blueExperienceDiff", "mean"),
+            )
+        )
+        level_summary["avg_level_band"] = level_summary["avg_level_band"].astype(str)
+
+        level_selection = alt.selection_point(
+            name="level_selection",
+            fields=["avg_level_band"],
+        )
+        level_chart = (
+            alt.Chart(level_summary)
+            .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6)
+            .encode(
+                x=alt.X(
+                    "avg_level_band:N",
+                    title="Faixa de nível médio do time azul",
+                    sort=level_order,
+                    axis=alt.Axis(labelAngle=0),
+                ),
+                y=alt.Y(
+                    "blue_win_rate:Q",
+                    title="Vitórias do time azul (%)",
+                    scale=alt.Scale(domain=[0, 100]),
+                ),
+                color=alt.condition(
+                    level_selection,
+                    alt.value(GREEN),
+                    alt.value("#d4d9d4"),
+                ),
+                opacity=alt.condition(
+                    level_selection,
+                    alt.value(1),
+                    alt.value(0.55),
+                ),
+                tooltip=[
+                    alt.Tooltip("avg_level_band:N", title="Faixa"),
+                    alt.Tooltip("blue_win_rate:Q", title="Vitórias azuis", format=".1f"),
+                    alt.Tooltip("average_gold_diff:Q", title="Dif. média de ouro", format="+,.0f"),
+                    alt.Tooltip("average_xp_diff:Q", title="Dif. média de XP", format="+,.0f"),
+                    alt.Tooltip("matches:Q", title="Partidas", format=","),
+                ],
+            )
+            .add_params(level_selection)
+            .properties(
+                height=330,
+                title="Taxa de vitória azul por faixa de nível médio",
+            )
+        )
+
+        chart_column, objectives_column = st.columns([1, 1.15], gap="large")
+        with chart_column:
+            level_event = st.altair_chart(
+                level_chart,
+                key="level_performance_chart",
+                on_select="rerun",
+                width="stretch",
+            )
+
+        clicked_items = []
+        if level_event and hasattr(level_event, "selection"):
+            clicked_items = level_event.selection.get("level_selection", [])
+        clicked_levels = [
+            item["avg_level_band"]
+            for item in clicked_items
+            if "avg_level_band" in item
+        ]
+        metric_data = (
+            performance[
+                performance["avg_level_band"].astype(str).isin(clicked_levels)
+            ]
+            if clicked_levels
+            else performance
+        )
+
+        if clicked_levels:
+            st.info(
+                f"Seleção ativa: **{', '.join(clicked_levels)}** "
+                f"({len(metric_data):,} partidas). Clique fora das barras para limpar."
+                .replace(",", ".")
+            )
+
+        baseline_blue_win_rate = df["blueWins"].mean() * 100
+        baseline_gold_diff = df["blueGoldDiff"].mean()
+        baseline_kill_diff = (df["blueKills"] - df["redKills"]).mean()
+        baseline_objective_share = (
+            df["blueObjectives"].sum()
+            / (df["blueObjectives"].sum() + df["redObjectives"].sum())
+            * 100
+        )
+
+        blue_win_rate = metric_data["blueWins"].mean() * 100
+        average_gold_diff = metric_data["blueGoldDiff"].mean()
+        average_kill_diff = metric_data["kill_diff"].mean()
+        objective_total = (
+            metric_data["blueObjectives"].sum()
+            + metric_data["redObjectives"].sum()
+        )
+        blue_objective_share = (
+            metric_data["blueObjectives"].sum() / objective_total * 100
+            if objective_total
+            else 0.0
+        )
+
+        metric_1, metric_2, metric_3, metric_4 = st.columns(4, gap="small")
+        metric_1.metric(
+            "Vitórias do time azul",
+            f"{blue_win_rate:.1f}%",
+            delta=f"{blue_win_rate - baseline_blue_win_rate:+.1f} p.p. vs base",
+            border=True,
+            help="Proporção de partidas do recorte vencidas pelo time azul.",
+        )
+        metric_2.metric(
+            "Vantagem média de ouro",
+            f"{average_gold_diff:+,.0f}".replace(",", "."),
+            delta=f"{average_gold_diff - baseline_gold_diff:+,.0f} vs base".replace(",", "."),
+            border=True,
+            help="blueGoldDiff: ouro azul menos ouro vermelho aos 10 minutos.",
+        )
+        metric_3.metric(
+            "Vantagem média de abates",
+            f"{average_kill_diff:+.2f}",
+            delta=f"{average_kill_diff - baseline_kill_diff:+.2f} vs base",
+            border=True,
+            help="Abates do time azul menos abates do time vermelho.",
+        )
+        metric_4.metric(
+            "Participação azul nos objetivos",
+            f"{blue_objective_share:.1f}%",
+            delta=f"{blue_objective_share - baseline_objective_share:+.1f} p.p. vs base",
+            border=True,
+            help="Parcela de dragões, arautos e torres do recorte conquistada pelo time azul.",
+        )
+
+        metric_data = metric_data.copy()
+        metric_data["objective_control"] = np.select(
+            [
+                metric_data["objective_diff"] > 0,
+                metric_data["objective_diff"] < 0,
+            ],
+            ["Vantagem Azul", "Vantagem Vermelha"],
+            default="Empate",
+        )
+        objective_order = ["Vantagem Vermelha", "Empate", "Vantagem Azul"]
+        objective_summary = (
+            metric_data.groupby(
+                ["objective_control", "team_label"],
+                as_index=False,
+                observed=True,
+            )
+            .agg(
+                matches=("gameId", "count"),
+                average_gold_diff=("blueGoldDiff", "mean"),
+            )
+        )
+        objective_chart = (
+            alt.Chart(objective_summary)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X(
+                    "objective_control:N",
+                    title="Controle de objetivos aos 10 minutos",
+                    sort=objective_order,
+                    axis=alt.Axis(labelAngle=0),
+                ),
+                xOffset="team_label:N",
+                y=alt.Y("matches:Q", title="Partidas"),
+                color=alt.Color(
+                    "team_label:N",
+                    title="Vencedor",
+                    scale=WINNER_SCALE,
+                ),
+                tooltip=[
+                    alt.Tooltip("objective_control:N", title="Controle"),
+                    alt.Tooltip("team_label:N", title="Vencedor"),
+                    alt.Tooltip("matches:Q", title="Partidas", format=","),
+                    alt.Tooltip(
+                        "average_gold_diff:Q",
+                        title="Dif. média de ouro",
+                        format="+,.0f",
+                    ),
+                ],
+            )
+            .properties(
+                height=330,
+                title="Vencedor final por controle de objetivos",
+            )
+        )
+        with objectives_column:
+            st.altair_chart(objective_chart, width="stretch")
