@@ -1,173 +1,316 @@
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
 from src.data_loader import load_data
 
+
 st.set_page_config(
-    page_title="Avaliação de Correlação entre Variáveis Quantitativas do Heart Disease Dataset",
+    page_title="LoL aos 10 minutos — análise de partidas",
+    page_icon="⚔️",
     layout="wide",
 )
 
-st.title("Avaliação de Correlação entre Variáveis Quantitativas do Heart Disease Dataset")
+GREEN_DARK = "#0f5132"
+GREEN = "#1b7f5a"
+AMBER = "#d99a16"
 
-df = load_data()
+VARS_QUANT = [
+    "blueWardsPlaced", "blueWardsDestroyed", "blueKills", "blueDeaths",
+    "blueAssists", "blueEliteMonsters", "blueTotalGold", "blueAvgLevel",
+    "blueTotalExperience", "blueTotalMinionsKilled",
+    "blueTotalJungleMinionsKilled", "blueGoldDiff", "blueExperienceDiff",
+    "blueCSPerMin", "blueGoldPerMin", "redWardsPlaced",
+    "redWardsDestroyed", "redKills", "redDeaths", "redAssists",
+    "redEliteMonsters", "redTotalGold", "redAvgLevel",
+    "redTotalExperience", "redTotalMinionsKilled",
+    "redTotalJungleMinionsKilled", "redGoldDiff", "redExperienceDiff",
+    "redCSPerMin", "redGoldPerMin",
+]
 
-# Variáveis quantitativas do estudo (mesma lista VARS_QUANT do notebook de EDA)
-VARS_QUANT = ["age", "trestbps", "chol", "thalach", "oldpeak"]
+LABELS = {
+    "blueWardsPlaced": "Wards colocadas — Azul",
+    "blueWardsDestroyed": "Wards destruídas — Azul",
+    "blueKills": "Abates — Azul",
+    "blueDeaths": "Mortes — Azul",
+    "blueAssists": "Assistências — Azul",
+    "blueEliteMonsters": "Monstros épicos — Azul",
+    "blueTotalGold": "Ouro total — Azul",
+    "blueAvgLevel": "Nível médio — Azul",
+    "blueTotalExperience": "Experiência total — Azul",
+    "blueTotalMinionsKilled": "Minions abatidos — Azul",
+    "blueTotalJungleMinionsKilled": "Monstros da selva — Azul",
+    "blueGoldDiff": "Diferença de ouro (Azul − Vermelho)",
+    "blueExperienceDiff": "Diferença de XP (Azul − Vermelho)",
+    "blueCSPerMin": "CS por minuto — Azul",
+    "blueGoldPerMin": "Ouro por minuto — Azul",
+    "redWardsPlaced": "Wards colocadas — Vermelho",
+    "redWardsDestroyed": "Wards destruídas — Vermelho",
+    "redKills": "Abates — Vermelho",
+    "redDeaths": "Mortes — Vermelho",
+    "redAssists": "Assistências — Vermelho",
+    "redEliteMonsters": "Monstros épicos — Vermelho",
+    "redTotalGold": "Ouro total — Vermelho",
+    "redAvgLevel": "Nível médio — Vermelho",
+    "redTotalExperience": "Experiência total — Vermelho",
+    "redTotalMinionsKilled": "Minions abatidos — Vermelho",
+    "redTotalJungleMinionsKilled": "Monstros da selva — Vermelho",
+    "redGoldDiff": "Diferença de ouro — Vermelho",
+    "redExperienceDiff": "Diferença de XP — Vermelho",
+    "redCSPerMin": "CS por minuto — Vermelho",
+    "redGoldPerMin": "Ouro por minuto — Vermelho",
+}
 
-# Sidebar: filtros (variáveis + intervalo)
-with st.sidebar:
-    st.header("Filtros")
+DEFAULT_VARS = [
+    "blueKills", "blueTotalGold", "blueAvgLevel", "blueTotalExperience",
+    "blueGoldDiff", "blueExperienceDiff",
+]
 
-    variaveis = st.multiselect(
-        "Variáveis Quantitativas",
-        options=VARS_QUANT,
-        default=VARS_QUANT,
-        help="Selecione as variáveis quantitativas que deseja analisar no dashboard.",
-    )
-
-    separar_por_classe = st.toggle(
-        "Distinguir por Classe",
-        value=False,
-        help="Colore a distribuição pela classe (doenca_cardiaca: Normal ou Cardíaco).",
-    )
-
-    # Um slider de intervalo para cada variável selecionada
-    intervalos = {}
-    for var in variaveis:
-        if pd.api.types.is_integer_dtype(df[var]):
-            minimo, maximo, passo = int(df[var].min()), int(df[var].max()), 1
-        else:
-            minimo, maximo, passo = float(df[var].min()), float(df[var].max()), 0.1
-        intervalos[var] = st.slider(
-            f"Intervalo de {var}",
-            min_value=minimo,
-            max_value=maximo,
-            value=(minimo, maximo),
-            step=passo,
-            key=f"intervalo_{var}",
-        )
-
-# Mantém só os pacientes dentro de todos os intervalos escolhidos
-df_filtrado = df
-for var, (inicio, fim) in intervalos.items():
-    df_filtrado = df_filtrado[df_filtrado[var].between(inicio, fim)]
-
-st.caption(f"{len(df_filtrado)} de {len(df)} pacientes dentro dos intervalos escolhidos.")
-
-# Dashboard 1: correlação (heatmap) à esquerda, distribuição (histograma) à direita
-col_correlacao, col_distribuicao = st.columns([1, 1.5])
-
-# Cores do histograma, em tons de sangue: vermelho arterial para Cardíaco, rosa claro para Normal
-COR_NORMAL = "#f4a6a6"
-COR_CARDIACO = "#c1121f"
-COR_HISTOGRAMA = COR_CARDIACO
-CORES_CLASSE = alt.Scale(domain=["Normal", "Cardíaco"], range=[COR_NORMAL, COR_CARDIACO])
-
-# Legenda das classes em texto, para caber no espaço livre da grade de histogramas
-LEGENDA_CLASSE = (
-    f"**Classe**  \n"
-    f":color[■]{{foreground=\"{COR_NORMAL}\"}} Normal  \n"
-    f":color[■]{{foreground=\"{COR_CARDIACO}\"}} Cardíaco"
+WINNER_SCALE = alt.Scale(
+    domain=["Time Azul", "Time Vermelho"],
+    range=[GREEN, AMBER],
 )
 
-with col_correlacao:
-    st.subheader("Correlação (Spearman)")
 
-    if len(variaveis) < 2:
-        st.warning("Selecione pelo menos 2 variáveis para calcular a correlação.")
-    elif len(df_filtrado) < 30:
-        st.warning("Poucos pacientes nos intervalos escolhidos para calcular a correlação.")
-    else:
-        # Matriz de correlação de Spearman das variáveis selecionadas, em formato longo (uma linha por célula)
-        corr = (
-            df_filtrado[variaveis]
-            .corr(method="spearman")
-            .rename_axis(index="var_y", columns="var_x")
-            .stack()
-            .rename("correlacao")
-            .reset_index()
+def prepare_data(data: pd.DataFrame) -> pd.DataFrame:
+    """Valida a exportação do notebook e cria campos derivados se necessário."""
+    required = {"gameId", "blueWins", *VARS_QUANT}
+    missing = sorted(required.difference(data.columns))
+    if missing:
+        st.error(
+            "O arquivo `data/clean/dataset.csv` ainda não é a exportação da EDA de "
+            "League of Legends. Execute todas as células de "
+            "`notebooks/eda-com-downloads.ipynb` para regenerá-lo."
         )
-        # Só o triângulo inferior, sem a diagonal (sempre 1): a matriz é simétrica, o resto é repetição
-        ordem = {var: i for i, var in enumerate(variaveis)}
-        corr = corr[corr["var_y"].map(ordem) > corr["var_x"].map(ordem)]
+        with st.expander("Colunas de LoL ausentes"):
+            st.code("\n".join(missing))
+        st.stop()
 
-        base = alt.Chart(corr).encode(
-            x=alt.X(
-                "var_x:N",
-                title=None,
-                sort=variaveis[:-1],  # a última variável só aparece nas linhas
-                axis=alt.Axis(labelAngle=0, labelFontSize=14),
-            ),
-            y=alt.Y("var_y:N", title=None, sort=variaveis[1:], axis=alt.Axis(labelFontSize=14)),  # a primeira só nas colunas
+    prepared = data.copy()
+    if "team_label" not in prepared:
+        prepared["team_label"] = prepared["blueWins"].map(
+            {0: "Time Vermelho", 1: "Time Azul"}
         )
-        heatmap = base.mark_rect().encode(
-            color=alt.Color(
-                "correlacao:Q",
-                title="Spearman",
-                scale=alt.Scale(scheme="redblue", domain=[-1, 1], reverse=True),
-                legend=alt.Legend(titleFontSize=14, labelFontSize=13),
-            ),
-            tooltip=["var_x", "var_y", alt.Tooltip("correlacao:Q", format=".2f")],
+    if "avg_level_band" not in prepared:
+        prepared["avg_level_band"] = pd.cut(
+            prepared["blueAvgLevel"],
+            bins=[-np.inf, 6.8, 7.0, 7.2, np.inf],
+            labels=["Baixo", "Médio-baixo", "Médio-alto", "Alto"],
         )
-        valores = base.mark_text(fontSize=16).encode(
-            text=alt.Text("correlacao:Q", format=".2f"),
-            color=alt.condition(
-                "abs(datum.correlacao) > 0.5", alt.value("white"), alt.value("black")
-            ),
+    if "blueObjectives" not in prepared:
+        prepared["blueObjectives"] = (
+            prepared["blueDragons"]
+            + prepared["blueHeralds"]
+            + prepared["blueTowersDestroyed"]
+        )
+    if "redObjectives" not in prepared:
+        prepared["redObjectives"] = (
+            prepared["redDragons"]
+            + prepared["redHeralds"]
+            + prepared["redTowersDestroyed"]
+        )
+    return prepared
+
+
+@st.cache_data
+def aggregate_histogram(
+    data: pd.DataFrame, column: str, split_by_winner: bool, bins: int = 28
+) -> pd.DataFrame:
+    """Agrega o histograma antes de enviá-lo ao Altair."""
+    values = data[column].dropna()
+    if values.empty:
+        return pd.DataFrame()
+
+    edges = np.linspace(float(values.min()), float(values.max()), bins + 1)
+    if edges[0] == edges[-1]:
+        edges[-1] = edges[0] + 1.0
+
+    valid = data[[column, "team_label"]].dropna().copy()
+    indexes = np.clip(np.digitize(valid[column], edges, right=True) - 1, 0, bins - 1)
+    histogram = pd.DataFrame(
+        {
+            "bin_start": edges[indexes],
+            "bin_end": edges[indexes + 1],
+            "team_label": valid["team_label"].to_numpy(),
+        }
+    )
+    group_columns = ["bin_start", "bin_end"]
+    if split_by_winner:
+        group_columns.append("team_label")
+    return (
+        histogram.groupby(group_columns, as_index=False, observed=True)
+        .size()
+        .rename(columns={"size": "matches"})
+    )
+
+
+st.title("League of Legends aos 10 minutos")
+st.caption(
+    "Como as vantagens construídas no início da partida se relacionam com o vencedor "
+    "em jogos ranqueados Diamond/Master?"
+)
+
+df = prepare_data(load_data())
+
+with st.sidebar:
+    st.header("Recorte da análise")
+    variables = st.multiselect(
+        "Variáveis quantitativas",
+        options=VARS_QUANT,
+        default=DEFAULT_VARS,
+        format_func=lambda value: LABELS[value],
+        help="As variáveis seguem a seleção quantitativa do notebook de EDA.",
+    )
+    split_by_winner = st.toggle(
+        "Separar pelo vencedor",
+        value=True,
+        help="Compara partidas vencidas pelos times azul e vermelho.",
+    )
+
+    st.subheader("Intervalos")
+    intervals: dict[str, tuple[float, float]] = {}
+    for variable in variables:
+        series = df[variable].dropna()
+        if pd.api.types.is_integer_dtype(series):
+            minimum, maximum, step = int(series.min()), int(series.max()), 1
+        else:
+            minimum, maximum, step = float(series.min()), float(series.max()), 0.1
+        intervals[variable] = st.slider(
+            LABELS[variable],
+            min_value=minimum,
+            max_value=maximum,
+            value=(minimum, maximum),
+            step=step,
+            key=f"range_{variable}",
         )
 
-        st.altair_chart(
-            (heatmap + valores).properties(height=380),
-            width="stretch",
-            alt="Mapa de calor (triângulo inferior, sem a diagonal) da correlação de Spearman entre as variáveis quantitativas selecionadas",
-        )
+df_filtered = df
+for variable, (start, end) in intervals.items():
+    df_filtered = df_filtered[df_filtered[variable].between(start, end)]
 
-with col_distribuicao:
-    st.subheader("Distribuição")
+st.caption(
+    f"{len(df_filtered):,} de {len(df):,} partidas no recorte atual.".replace(",", ".")
+)
 
-    if not variaveis:
-        st.warning("Selecione pelo menos 1 variável para ver a distribuição.")
-    elif df_filtrado.empty:
-        st.warning("Nenhum paciente dentro dos intervalos escolhidos.")
-    else:
-        # Com número par de variáveis não sobra espaço na grade: a legenda vai acima dela
-        if separar_por_classe and len(variaveis) % 2 == 0:
-            st.markdown(LEGENDA_CLASSE)
+tab_dashboard_1, tab_dashboard_2 = st.tabs(
+    ["Dashboard 1 · Relações", "Dashboard 2 · Desempenho"]
+)
 
-        # Um histograma por variável selecionada, em grade de 2 colunas (cada um com a sua escala)
-        for inicio in range(0, len(variaveis), 2):
-            colunas = st.columns(2)
-            for coluna, var in zip(colunas, variaveis[inicio : inicio + 2]):
-                histograma = (
-                    alt.Chart(df_filtrado[[var, "doenca_cardiaca"]])
-                    .mark_bar()
-                    .encode(
-                        x=alt.X(f"{var}:Q", bin=alt.Bin(maxbins=20), title=var),
-                        y=alt.Y("count()", title="Pacientes"),
-                        tooltip=[alt.Tooltip("count()", title="Pacientes")],
-                    )
-                    .properties(height=200)
+with tab_dashboard_1:
+    correlation_column, distribution_column = st.columns([1.15, 1], gap="large")
+
+    with correlation_column:
+        st.subheader("Correlação de Spearman")
+        st.caption("O triângulo inferior evita repetir pares equivalentes.")
+
+        if len(variables) < 2:
+            st.warning("Selecione ao menos duas variáveis para calcular a correlação.")
+        elif len(df_filtered) < 30:
+            st.warning("O recorte precisa ter ao menos 30 partidas para esta visualização.")
+        else:
+            correlation = (
+                df_filtered[variables]
+                .corr(method="spearman")
+                .rename_axis(index="variable_y", columns="variable_x")
+                .stack()
+                .rename("correlation")
+                .reset_index()
+            )
+            order = {variable: index for index, variable in enumerate(variables)}
+            correlation = correlation[
+                correlation["variable_y"].map(order)
+                > correlation["variable_x"].map(order)
+            ].copy()
+            correlation["label_x"] = correlation["variable_x"].map(LABELS)
+            correlation["label_y"] = correlation["variable_y"].map(LABELS)
+
+            base = alt.Chart(correlation).encode(
+                x=alt.X(
+                    "label_x:N", title=None,
+                    sort=[LABELS[value] for value in variables[:-1]],
+                    axis=alt.Axis(labelAngle=-35, labelLimit=140),
+                ),
+                y=alt.Y(
+                    "label_y:N", title=None,
+                    sort=[LABELS[value] for value in variables[1:]],
+                    axis=alt.Axis(labelLimit=170),
+                ),
+            )
+            cells = base.mark_rect(cornerRadius=3).encode(
+                color=alt.Color(
+                    "correlation:Q", title="Spearman (r)",
+                    scale=alt.Scale(
+                        domain=[-1, 0, 1], range=[AMBER, "#f6f4e9", GREEN_DARK]
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("label_y:N", title="Variável Y"),
+                    alt.Tooltip("label_x:N", title="Variável X"),
+                    alt.Tooltip("correlation:Q", title="Correlação", format=".2f"),
+                ],
+            )
+            labels = base.mark_text(fontSize=12, fontWeight=600).encode(
+                text=alt.Text("correlation:Q", format=".2f"),
+                color=alt.condition(
+                    "abs(datum.correlation) >= 0.55",
+                    alt.value("white"), alt.value("#24332b"),
+                ),
+            )
+            st.altair_chart((cells + labels).properties(height=480), width="stretch")
+
+    with distribution_column:
+        st.subheader("Distribuição")
+        st.caption("Compare o comportamento da variável no recorte selecionado.")
+
+        if not variables:
+            st.warning("Selecione uma variável para exibir sua distribuição.")
+        elif df_filtered.empty:
+            st.warning("Nenhuma partida corresponde aos intervalos escolhidos.")
+        else:
+            histogram_variable = st.selectbox(
+                "Variável do histograma", options=variables,
+                index=len(variables) - 1,
+                format_func=lambda value: LABELS[value],
+            )
+            histogram_data = aggregate_histogram(
+                df_filtered, histogram_variable, split_by_winner
+            )
+            histogram = (
+                alt.Chart(histogram_data)
+                .mark_bar(opacity=0.88)
+                .encode(
+                    x=alt.X(
+                        "bin_start:Q", bin="binned",
+                        title=LABELS[histogram_variable],
+                    ),
+                    x2="bin_end:Q",
+                    y=alt.Y("matches:Q", title="Partidas"),
                 )
-                if separar_por_classe:
-                    histograma = histograma.encode(
-                        color=alt.Color(
-                            "doenca_cardiaca:N",
-                            title="Classe",
-                            scale=CORES_CLASSE,
-                            legend=None,
-                        ),
-                        tooltip=["doenca_cardiaca", alt.Tooltip("count()", title="Pacientes")],
-                    )
-                else:
-                    histograma = histograma.mark_bar(color=COR_HISTOGRAMA)
+                .properties(height=440)
+            )
+            if split_by_winner:
+                histogram = histogram.encode(
+                    color=alt.Color(
+                        "team_label:N", title="Vencedor", scale=WINNER_SCALE
+                    ),
+                    xOffset="team_label:N",
+                    tooltip=[
+                        alt.Tooltip("team_label:N", title="Vencedor"),
+                        alt.Tooltip("bin_start:Q", title="De", format=".1f"),
+                        alt.Tooltip("bin_end:Q", title="Até", format=".1f"),
+                        alt.Tooltip("matches:Q", title="Partidas", format=","),
+                    ],
+                )
+            else:
+                histogram = histogram.mark_bar(color=GREEN, opacity=0.88).encode(
+                    tooltip=[
+                        alt.Tooltip("bin_start:Q", title="De", format=".1f"),
+                        alt.Tooltip("bin_end:Q", title="Até", format=".1f"),
+                        alt.Tooltip("matches:Q", title="Partidas", format=","),
+                    ]
+                )
+            st.altair_chart(histogram, width="stretch")
 
-                with coluna:
-                    st.altair_chart(histograma, width="stretch", alt=f"Histograma da variável {var}")
-
-            # Número ímpar de variáveis: a legenda ocupa o espaço que sobrou na última linha
-            if separar_por_classe and len(colunas) == 2 and len(variaveis[inicio : inicio + 2]) == 1:
-                colunas[1].markdown(LEGENDA_CLASSE)
-
-# TODO: Dashboard 2 — KPIs (Aula 22)
+with tab_dashboard_2:
+    st.info("O painel de desempenho será implementado no próximo commit.")
