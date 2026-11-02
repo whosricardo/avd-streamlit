@@ -198,9 +198,7 @@ tab_dashboard_1, tab_dashboard_2 = st.tabs(
 )
 
 with tab_dashboard_1:
-    correlation_column, distribution_column = st.columns([1.15, 1], gap="large")
-
-    with correlation_column:
+    with st.container(border=True):
         st.subheader("Correlação de Spearman")
         st.caption("O triângulo inferior evita repetir pares equivalentes.")
 
@@ -259,7 +257,7 @@ with tab_dashboard_1:
             )
             st.altair_chart((cells + labels).properties(height=480), width="stretch")
 
-    with distribution_column:
+    with st.container(border=True):
         st.subheader("Distribuição")
         st.caption("Compare o comportamento da variável no recorte selecionado.")
 
